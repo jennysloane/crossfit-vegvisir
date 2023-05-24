@@ -151,7 +151,7 @@ d <- data.frame(word = names(v), freq=v) %>%
   filter(freq > 1)
 
 set.seed(2)
-wordcloud2(d, color = "random-dark", backgroundColor = "white", size = .5, shuffle = FALSE)
+wordcloud2(d, size = .5, shuffle = FALSE, color='random-light', backgroundColor="black")
 
 ```
 
