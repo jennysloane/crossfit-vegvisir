@@ -1,0 +1,502 @@
+---
+title: "Vegvisir CrossFit Survey Results"
+output:
+  rmdformats::readthedown:
+    # code_folding: show
+    self_contained: true
+    thumbnails: false
+    lightbox: false
+css: style.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+## put these first
+library(lessR)
+library(wordcloud)
+library(tm)
+## 
+library(tidyverse)
+library(janitor)
+library(wordcloud2)
+library(reactable)
+library(gt)
+library(ggeasy)
+library(ggpubr)
+library(scales)
+
+hc1<-"#b6e0fa"
+hc2<-"#132960"
+hc3<-"#036da7"
+hc4<-"#e3b23c"
+hc5 <-"#c884a6"
+hc6<-"#95e06c"
+hc7<-"#f0a6ca"
+
+my_pallete<-c(hc1,hc2,hc3,hc4,hc5,hc6,hc7)
+
+theme_set(theme_classic() +
+            easy_remove_legend() +
+            easy_text_size(15))
+
+# scale_colour_continuous <- scale_colour_viridis_c
+# scale_colour_discrete <- scale_colour_viridis_d
+# scale_colour_binned <- scale_colour_viridis_b
+```
+
+
+```{r}
+raw_data <- read_csv("survey_data.csv") %>%
+  clean_names()
+
+clean_data <- raw_data %>%
+  rename(years = how_long_have_you_been_doing_cross_fit,
+         motivation = what_motivated_you_to_join_our_cross_fit_gym,
+         nerves = did_you_have_any_hesitations_nerves_when_joining_vegvisir_cross_fit_or_attending_your_first_class, 
+         nclass = how_many_classes_do_you_usually_attend_a_week,
+         workout_other = do_you_workout_outside_of_cross_fit_if_so_what_do_you_typically_do_e_g_running_swimming_cycling_etc_and_how_many_times_per_week,
+         gyms_other = do_you_belong_to_any_other_gyms_or_health_facilities_clubs_outside_of_vegvisir_if_yes_please_describe,
+         fav_modality = what_is_your_favorite_modality,
+         movement_scared = what_movement_scares_your_the_most,
+         lift_improve = what_lift_would_you_like_to_improve_the_most,
+         gymnastics_improve = which_gymnastic_movement_would_you_like_to_improve_the_most,
+         movement_fav = what_is_your_favorite_cross_fit_movement_including_lifts_and_gymnastics,
+         goal_review = did_you_find_your_last_goal_review_added_value_to_your_training,
+         vegvisir_love = what_do_you_love_most_about_being_a_vegvisir_athlete,
+         suggestions = do_you_have_any_suggestions_or_recommendations_for_vegvisir_cross_fit) %>%
+  select(-timestamp)
+```
+
+# How long have you been doing crossfit?
+```{r}
+
+clean_data$years <- factor(clean_data$years, levels = c("5+ years", "3-5 years", "1-3 years", "6-12 months", "0-6 months"))
+
+
+PieChart(years, data = clean_data,
+         hole = 0.0,
+         color = "black",
+         lwd = 1.5,
+         lty = 1,
+         main = NULL,
+         values_size = 1,
+         cex = 1.5,
+         quiet = TRUE, 
+         fill = my_pallete)
+
+# years_pie <- clean_data %>% 
+#   select(years) %>%
+#   group_by(years) %>%
+#   count(years) %>%
+#   ungroup() %>%
+#   mutate(pct = n / sum(n))
+# 
+# ggplot(years_pie, aes(x = "", y = pct, fill = years)) +
+#   geom_bar(stat = "identity", color = "white") +
+#   geom_text(aes(x = 1.6, label = scales::percent(pct, accuracy = .1)), position = position_stack(vjust = .5)) +
+#   coord_polar("y") +
+#   theme_void()
+
+```
+
+# What motivated you to join our CrossFit gym?
+
+```{r include=FALSE}
+motivation_data <- clean_data %>%
+  select(motivation)
+motivation_data <- mutate_all(motivation_data, .funs=tolower)
+
+motivation_data <- mutate(motivation_data, 
+                          Health = str_detect(motivation_data$motivation, regex("health|better care|stress|healthier|fitness|cancer survivor|shape|weight")), 
+                          "Getting Stronger" = str_detect(motivation_data$motivation, regex("fitter|olympics")),
+                          Location = str_detect(motivation_data$motivation, regex("location|close|closest|proximity|luck")),
+                          Vegvisir = str_detect(motivation_data$motivation, regex("programming|coaches|coaching|quality|nice|clean|staff|community|culture|atmosphere")),
+                          Covid = str_detect(motivation_data$motivation, regex("covid")),
+                          Enjoyable = str_detect(motivation_data$motivation, regex("fun|interested"))) 
+
+motivation_themes <- motivation_data %>%
+  summarise(across(Health:Enjoyable, ~ sum(., na.rm = TRUE))) %>%
+  pivot_longer(Health:Enjoyable, names_to = "theme")
+
+ggplot(motivation_themes, aes(x = reorder(theme, value), y = value, fill=theme)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  labs(x = "", y = "") + 
+  scale_fill_manual(values = my_pallete)
+  
+
+```
+
+
+```{r}
+corpus <- Corpus(VectorSource(clean_data$motivation))
+
+# corpus[[1]][[1]]
+# corpus[[2]][[1]]
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers) 
+corpus <- tm_map(corpus, removeWords, stopwords("english")) # remove english common stopwords "a", "the", etc.
+corpus <- tm_map(corpus, removePunctuation) 
+corpus <- tm_map(corpus, stripWhitespace) 
+corpus <- tm_map(corpus, removeWords, c("went", "something", "get", "better", "wanted", "take", "apartment", "crossfit", "looking", "great", "houston", "just", "really", "needed", "gym"))
+#corpus <- tm_map(corpus, stemDocument)
+
+# create TDM
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v) %>%
+  filter(freq > 1)
+
+set.seed(2)
+wordcloud2(d, color = "random-dark", backgroundColor = "white", size = .5, shuffle = FALSE)
+
+```
+
+
+```{r}
+motivation <- clean_data %>%
+  select(motivation) %>%
+  rename("Motiavtion" = motivation)
+
+reactable(motivation, striped = TRUE)
+```
+
+
+# Did you have any hesitations/nerves when joining Vegvisir CrossFit or attending your first class?
+
+```{r include=TRUE}
+nerves_data <- clean_data %>%
+  select(nerves) 
+                              
+nerves_data <- mutate_all(nerves_data, .funs=tolower)
+
+patterns_yes <- regex("yes|yeah|scared|scary|fear|silly|didnt feel confident")
+patterns_no <- regex("no$|nope|not really|not much|no/s|no i had done crossfit previously")
+
+nerves_pie <- nerves_data %>%
+  mutate(across(everything(), ~gsub("[[:punct:]]", "", .x)),
+         nerves_yes_no = case_when(str_detect(nerves, patterns_yes) ~ "Yes",
+                            str_detect(nerves, patterns_no) ~ "No",
+                            TRUE ~ "N/A")) %>%
+  filter(nerves_yes_no != "N/A")
+
+# nerves_data %>%
+#   mutate(across(everything(), ~gsub("[[:punct:]]", "", .x)),
+#          nerves_yes_no = case_when(str_detect(nerves, patterns_yes) ~ "Yes",
+#                             str_detect(nerves, patterns_no) ~ "No",
+#                             TRUE ~ "N/A")) %>%
+#   filter(nerves_yes_no != "N/A") %>%
+#   group_by(nerves_yes_no) %>%
+#   count()
+
+PieChart(nerves_yes_no, data = nerves_pie,
+         hole = 0.0,
+         color = "black",
+         lwd = 1.5,
+         lty = 1,
+         main = NULL,
+         values_size = 1,
+         cex = 1.5,
+         quiet = TRUE, 
+         fill = my_pallete)
+
+# nerves_pie <- nerves_data %>%
+#   mutate(yes = str_detect(nerves,patterns_yes),
+#          no = str_detect(nerves,patterns_no))  %>%
+#   summarise(across(yes:no, sum)) %>%
+#   pivot_longer(yes:no, names_to = "nerves") %>%
+#   mutate(pct = value / sum(value))
+# 
+# ggplot(nerves_pie, aes(x = "", y = pct, fill = nerves)) +
+#   geom_bar(stat = "identity", color = "white") +
+#   geom_text(aes(x = 1.6, label = scales::percent(pct, accuracy = .1)), position = position_stack(vjust = .5)) +
+#   coord_polar("y") +
+#   theme_void() +
+#   easy_remove_legend_title()
+# 
+# nerves_pie2 <- nerves_data %>%
+#   mutate(yes = str_detect(nerves,patterns_yes),
+#          no = str_detect(nerves,patterns_no))
+
+
+
+```
+
+# How many classes do you usually attend a week?
+```{r}
+clean_data$nclass <- factor(clean_data$nclass, levels = c(5,4,3,2),
+                            labels = c("5 Classes", "4 Classes", "3 Classes", "2 Classes"))
+
+PieChart(nclass, data = clean_data,
+         hole = 0.0,
+         color = "black",
+         lwd = 1.5,
+         lty = 1,
+         main = NULL,
+         values_size = 1,
+         cex = 1.5,
+         quiet = TRUE, 
+         fill = my_pallete)
+
+# nclass_pie <- clean_data %>% 
+#   select(nclass) %>%
+#   group_by(nclass) %>%
+#   count(nclass) %>%
+#   ungroup() %>%
+#   mutate(pct = n / sum(n))
+# 
+# ggplot(nclass_pie, aes(x = "", y = pct, fill = nclass)) +
+#   geom_bar(stat = "identity", color = "white") +
+#   # geom_text(aes(x = 1.6, label = nclass), position = position_stack(vjust = .5)) +
+#   # geom_text(aes(label = scales::percent(pct, accuracy = .1)),
+#   #           position = position_stack(vjust = 0.5)) +
+#   geom_text(aes(x = 1.6, label = scales::percent(pct, accuracy = .1)), position = position_stack(vjust = .5)) +
+#   coord_polar("y") +
+#   theme_void() +
+#   easy_remove_legend_title()
+
+```
+
+# What type of exercise do you do outside of crossfit?
+
+```{r}
+corpus_workout <- Corpus(VectorSource(clean_data$workout_other))
+
+corpus_workout <- tm_map(corpus_workout, content_transformer(tolower))
+corpus_workout <- tm_map(corpus_workout, removeNumbers) 
+corpus_workout <- tm_map(corpus_workout, removeWords, stopwords("english")) # remove english common stopwords "a", "the", etc.
+corpus_workout <- tm_map(corpus_workout, removePunctuation) 
+corpus_workout <- tm_map(corpus_workout, stripWhitespace) 
+corpus_workout <- tm_map(corpus_workout, removeWords, c("week", "times", "yes", "sometimes", "per", "maybe", "day", "every", "xweek"))
+#corpus <- tm_map(corpus, stemDocument)
+
+# create TDM
+tdm_workout <- TermDocumentMatrix(corpus_workout)
+m_workout <- as.matrix(tdm_workout)
+v_workout <- sort(rowSums(m_workout), decreasing=TRUE)
+d_workout <- data.frame(word = names(v_workout), freq=v_workout) %>%
+  filter(freq > 1)
+
+d_workout <- d_workout %>%
+  as_tibble() %>%
+  mutate(word = ifelse(word == "run", "running", word),
+         word = factor(word)) %>%
+  group_by(word) %>%
+  dplyr::summarise(freq = sum(freq))
+
+# set.seed(2)
+# wordcloud2(d_workout, color = "random-dark", backgroundColor = "white", size = .3, shuffle = FALSE)
+
+ggplot(d_workout, aes(x = reorder(word, freq), freq, fill = word)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = "", y = "") + 
+  scale_fill_manual(values = my_pallete)
+
+```
+
+
+# Do you belong to any other gyms or health facilities/clubs outside of Vegvisir?
+
+```{r}
+
+gym_data <- clean_data %>%
+  select(gyms_other) 
+                              
+gym_data <- mutate_all(gym_data, .funs=tolower)
+
+gym_pie <- gym_data %>%
+  mutate(across(everything(), ~gsub("[[:punct:]]", "", .x)),
+         outside_gym = ifelse(gyms_other %in% c("no", "na", "nope"), FALSE, TRUE))
+
+gym_pie$outside_gym <- factor(gym_pie$outside_gym, labels = c("No", "Yes"))
+
+PieChart(outside_gym, data = gym_pie,
+         hole = 0.0,
+         color = "black",
+         lwd = 1.5,
+         lty = 1,
+         main = NULL,
+         values_size = 1,
+         cex = 1.5,
+         quiet = TRUE, 
+         fill = my_pallete)
+                        
+```
+
+
+# What is your favorite modality?
+
+```{r}
+# unique(clean_data$fav_modality)
+
+modality_data <- clean_data %>%
+  select(fav_modality) %>%
+  mutate(modality = case_when(fav_modality == "Cardio Monster (Bike, Jump Rope, Running, Rowing, etc...)" ~ "Cardio Monster",
+                              fav_modality == "Gymnastics (Pull-ups, Muscle-Ups, Pistols, Box Jumps, etc...)" ~ "Gymnastics",
+                              fav_modality == "Olympic Lifting (Snatch, Clean, and Jerk)" ~ "Olympic Lifting",
+                              fav_modality == "Power Lifting (Back Squat, Deadlift, Shoulder Press, and Bench Press)" ~ "Power Lifting",
+                              TRUE ~ 'Other')) %>%
+  group_by(modality) %>%
+  count() 
+
+
+modality_data$modality <- factor(modality_data$modality)
+#modality_data$n <- factor(modality_data$n)
+
+ggplot(modality_data, aes(x = reorder(modality, n), y = n, fill=modality)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  labs(x = "", y = "") +
+  scale_y_continuous(breaks= pretty_breaks()) + 
+  scale_fill_manual(values = my_pallete)
+
+
+```
+
+# What movement scares your the most?
+
+```{r}
+scary_data <- clean_data %>%
+  select(movement_scared) %>%
+  mutate(movement = case_when(movement_scared == "Inversions (Handstands, Handstand Push-Ups, Box HSPU)" ~ "Inversions",
+                            TRUE ~ movement_scared)) %>%
+  group_by(movement) %>%
+  count() 
+
+
+scary_data$movement <- factor(scary_data$movement)
+#modality_data$n <- factor(modality_data$n)
+
+ggplot(scary_data, aes(x = reorder(movement, n), y = n, fill=movement)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  labs(x = "", y = "") +
+  scale_y_continuous(breaks= pretty_breaks()) + 
+  scale_fill_manual(values = my_pallete)
+
+#################
+clean_data$years <- factor(clean_data$years)
+
+scary_data_yrs <- clean_data %>%
+  select(movement_scared, years) %>%
+  mutate(movement = case_when(movement_scared == "Inversions (Handstands, Handstand Push-Ups, Box HSPU)" ~ "Inversions",
+                            TRUE ~ movement_scared)) %>%
+  group_by(movement, years) %>%
+  count() 
+
+scary_data_yrs$years <- factor(scary_data_yrs$years, levels = c("0-6 months", "6-12 months", "1-3 years", "3-5 years", "5+ years"))
+
+ggplot(scary_data_yrs, aes(x = reorder(movement, n), y = n, fill=movement)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  facet_wrap(~years) +
+  labs(x = "", y = "") +
+  scale_y_continuous(breaks= pretty_breaks()) + 
+  scale_fill_manual(values = my_pallete)
+
+```
+
+# What lift would you like to improve the most?
+
+```{r}
+improve_data <- clean_data %>%
+  select(lift_improve) %>%
+  group_by(lift_improve) %>%
+  count() %>%
+  na.omit() %>%
+  filter(lift_improve != "I’ve always enjoyed the programming and rotation of all of the above.") %>%
+  filter(lift_improve != "MUs, handstand walk, HSPU")
+
+
+improve_data$lift_improve <- factor(improve_data$lift_improve)
+#modality_data$n <- factor(modality_data$n)
+
+ggplot(improve_data, aes(x = reorder(lift_improve, n), y = n, fill=lift_improve)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  labs(x = "", y = "") +
+  scale_y_continuous(breaks= pretty_breaks()) + 
+  scale_fill_manual(values = my_pallete)
+
+############
+
+improve_data_yrs <- clean_data %>%
+  select(lift_improve, years) %>%
+  group_by(lift_improve, years) %>%
+  count() %>%
+  na.omit() %>%
+  filter(lift_improve != "I’ve always enjoyed the programming and rotation of all of the above.") %>%
+  filter(lift_improve != "MUs, handstand walk, HSPU")
+
+improve_data_yrs$years <- factor(improve_data_yrs$years, levels = c("0-6 months", "6-12 months", "1-3 years", "3-5 years", "5+ years"))
+
+ggplot(improve_data_yrs, aes(x = reorder(lift_improve, n), y = n, fill=lift_improve)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  facet_wrap(~years) +
+  labs(x = "", y = "") + 
+  scale_fill_manual(values = my_pallete)
+```
+
+# Which gymnastic movement would you like to improve the most?
+
+```{r}
+gymnastic_improve_data <- clean_data %>%
+  select(gymnastics_improve) %>%
+   mutate(gymnastics_improve = case_when(gymnastics_improve == "Double Unders (Yeah we know these are cardio)" ~ "Double Unders",
+                               TRUE ~ gymnastics_improve)) %>%
+  group_by(gymnastics_improve) %>%
+  count()
+
+gymnastic_improve_data$gymnastics_improve <- factor(gymnastic_improve_data$gymnastics_improve)
+#modality_data$n <- factor(modality_data$n)
+
+ggplot(gymnastic_improve_data, aes(x = reorder(gymnastics_improve, n), y = n, fill=gymnastics_improve)) +
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  labs(x = "", y = "") +
+  scale_y_continuous(breaks= pretty_breaks()) + 
+  scale_fill_manual(values = my_pallete)
+```
+
+# What is your favorite CrossFit movement (including lifts and gymnastics)?
+
+```{r}
+favorite_data <- clean_data %>%
+  select(movement_fav) %>%
+  rename( "Favorite Movement" = movement_fav)
+
+reactable(favorite_data, striped = TRUE)
+```
+
+# What do you love most about being a Vegvisir athlete?
+
+```{r fig.width=8, fig.height=5}
+corpus <- Corpus(VectorSource(clean_data$vegvisir_love))
+
+# corpus[[1]][[1]]
+# corpus[[2]][[1]]
+
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers) 
+corpus <- tm_map(corpus, removeWords, stopwords("english")) # remove english common stopwords "a", "the", etc.
+corpus <- tm_map(corpus, removePunctuation) 
+corpus <- tm_map(corpus, stripWhitespace) 
+corpus <- tm_map(corpus, removeWords, c("part", "day", "just", "sense", "feel", "always", "whole", "good"))
+#corpus <- tm_map(corpus, stemDocument)
+
+# create TDM
+tdm <- TermDocumentMatrix(corpus)
+m <- as.matrix(tdm)
+v <- sort(rowSums(m), decreasing=TRUE)
+d <- data.frame(word = names(v), freq=v) %>%
+  filter(freq > 1)
+
+set.seed(2)
+wordcloud2(d, size = .7, shuffle = FALSE, color='random-light', backgroundColor="black")
+```
+

@@ -1,0 +1,71 @@
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+legend {
+  color: #132960;
+}
+
+#sidebar h2 {
+background-color: #cde1ed;
+color: #132960;
+  }
+
+#sidebar {
+background-color: #132960;
+  }
+
+#hc1 {
+color: #132960;
+  }
+
+#hc2 {
+color: #cde1ed;
+  }
+
+#hc3 {
+color: #036DA7;
+  }
+
+.title {
+  
+  color: #132960;
+}
+
+a {
+  color: #036DA7;
+}
+
+a:hover {
+  color: #cde1ed;
+}
+
+
+#nav-top span.glyphicon {
+
+color: #132960;
+  }
+
+#highlight {
+font-size: 20px color: #132960;
+  
+  }
+
+#main :not(.leaflet-control)>a {
+color: #132960;
+  }
+  
+  
+#content img {
+    max-width: 60%;
+}
+
+#sidebar a {
+    color: #ffffff;
+}
+
+#sidebar h2 a {
+    color: #132960;
+}
